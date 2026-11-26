@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use cottonmd_markdown::ParsedNote;
+use cottonmd_markdown::{resolve_relative_link, LinkStyle, ParsedNote};
 use cottonmd_vault::{EntryKind, VaultFile};
 
 #[derive(Debug, Clone, Default)]
@@ -52,12 +52,19 @@ impl VaultGraph {
                 if link.target.is_empty() {
                     continue;
                 }
-                let key = link.target.to_ascii_lowercase();
-                let resolved = by_rel_lower
-                    .get(&key)
-                    .or_else(|| by_no_ext_lower.get(&key))
-                    .or_else(|| by_stem.get(&key).and_then(|v| v.first()))
-                    .cloned();
+                let resolved = match link.style {
+                    LinkStyle::Markdown => resolve_relative_link(source_path, &link.target)
+                        .and_then(|path| by_rel_lower.get(&path.to_ascii_lowercase()))
+                        .cloned(),
+                    LinkStyle::Wiki => {
+                        let key = link.target.to_ascii_lowercase();
+                        by_rel_lower
+                            .get(&key)
+                            .or_else(|| by_no_ext_lower.get(&key))
+                            .or_else(|| by_stem.get(&key).and_then(|v| v.first()))
+                            .cloned()
+                    }
+                };
 
                 match resolved {
                     Some(target_path) => {
@@ -172,5 +179,39 @@ mod tests {
         assert_eq!(g.deadends(), vec!["Guide.md", "Lonely.md"]);
         assert!(g.unresolved_links()["Start.md"].contains("Missing Note"));
         assert!(g.tags()["index"].contains("Start.md"));
+    }
+
+    #[test]
+    fn resolves_relative_markdown_links_across_folders() {
+        let files = vec![
+            md_file("docs/sprint_36/docs/CRMMS-1/README.md", "README"),
+            md_file("_library/repos/zenith.md", "zenith"),
+            md_file("docs/sprint_36/backend-work.md", "backend-work"),
+        ];
+        let ticket = parse_note(
+            "Services: [zenith](../../../../_library/repos/zenith.md), [missing](../../nope.md)",
+        );
+        let sprint = parse_note("| [CRMMS-1](docs/CRMMS-1/README.md) |");
+        let repo_page = parse_note("No links.");
+
+        let graph = VaultGraph::build(
+            &files,
+            [
+                ("docs/sprint_36/docs/CRMMS-1/README.md", &ticket),
+                ("docs/sprint_36/backend-work.md", &sprint),
+                ("_library/repos/zenith.md", &repo_page),
+            ],
+        );
+
+        assert_eq!(
+            graph.backlinks("_library/repos/zenith.md"),
+            vec!["docs/sprint_36/docs/CRMMS-1/README.md"]
+        );
+        assert_eq!(
+            graph.backlinks("docs/sprint_36/docs/CRMMS-1/README.md"),
+            vec!["docs/sprint_36/backend-work.md"]
+        );
+        assert!(graph.unresolved_links()["docs/sprint_36/docs/CRMMS-1/README.md"]
+            .contains("../../nope.md"));
     }
 }

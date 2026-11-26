@@ -3,6 +3,10 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+mod scope;
+
+pub use scope::{VaultScope, SCOPE_FILE_NAME};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryKind {
     Markdown,
@@ -69,9 +73,14 @@ impl Vault {
         &self.config_dir
     }
 
+    pub fn scope(&self) -> io::Result<VaultScope> {
+        VaultScope::load(&self.root.join(&self.config_dir))
+    }
+
     pub fn list_files(&self) -> io::Result<Vec<VaultFile>> {
+        let scope = self.scope()?;
         let mut entries = Vec::new();
-        self.walk(&self.root, &mut entries)?;
+        self.walk(&self.root, &scope, &mut entries)?;
         entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
         Ok(entries)
     }
@@ -115,7 +124,7 @@ impl Vault {
         Ok(normalized)
     }
 
-    fn walk(&self, dir: &Path, out: &mut Vec<VaultFile>) -> io::Result<()> {
+    fn walk(&self, dir: &Path, scope: &VaultScope, out: &mut Vec<VaultFile>) -> io::Result<()> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -125,14 +134,16 @@ impl Vault {
                 continue;
             }
             let meta = entry.metadata()?;
+            let rel = path
+                .strip_prefix(&self.root)
+                .map_err(io::Error::other)?
+                .to_string_lossy()
+                .replace('\\', "/");
             if meta.is_dir() {
-                self.walk(&path, out)?;
-            } else if meta.is_file() {
-                let rel = path
-                    .strip_prefix(&self.root)
-                    .map_err(io::Error::other)?
-                    .to_string_lossy()
-                    .replace('\\', "/");
+                if scope.should_enter_directory(&rel, &name_str) {
+                    self.walk(&path, scope, out)?;
+                }
+            } else if meta.is_file() && scope.should_index_file(&rel) {
                 let ext = path
                     .extension()
                     .and_then(|e| e.to_str())

@@ -109,6 +109,13 @@ fn run() -> Result<(), String> {
                 println!("{link}");
             }
         }
+        "related" => {
+            let target = rest
+                .first()
+                .ok_or_else(|| "usage: related <relative-path>".to_string())?;
+            let (parsed, graph) = index_vault(&vault, &files)?;
+            print_related_notes(target, &parsed, &graph)?;
+        }
         "orphans" => {
             let (_, graph) = index_vault(&vault, &files)?;
             for note in graph.orphans() {
@@ -125,7 +132,7 @@ fn run() -> Result<(), String> {
             let (_, graph) = index_vault(&vault, &files)?;
             for (src, targets) in graph.unresolved_links() {
                 for t in targets {
-                    println!("{src} -> [[{t}]]");
+                    println!("{src} -> {t}");
                 }
             }
         }
@@ -167,6 +174,35 @@ fn index_vault(
     Ok((parsed, graph))
 }
 
+fn print_related_notes(
+    target: &str,
+    parsed: &BTreeMap<String, ParsedNote>,
+    graph: &VaultGraph,
+) -> Result<(), String> {
+    if !parsed.contains_key(target) {
+        return Err(format!("note not found in vault: {target}"));
+    }
+    let mut incoming = graph.backlinks(target);
+    incoming.sort_by(|left, right| right.cmp(left));
+    let outgoing = graph.outgoing_links(target);
+    let directed_notes = incoming
+        .into_iter()
+        .map(|path| ("in", path))
+        .chain(outgoing.into_iter().map(|path| ("out", path)));
+    for (direction, path) in directed_notes {
+        println!("{direction}\t{path}\t{}", note_title(path, parsed));
+    }
+    Ok(())
+}
+
+fn note_title<'a>(path: &'a str, parsed: &'a BTreeMap<String, ParsedNote>) -> &'a str {
+    parsed
+        .get(path)
+        .and_then(|note| note.headings.iter().find(|heading| heading.level == 1))
+        .map(|heading| heading.text.as_str())
+        .unwrap_or_else(|| path.rsplit('/').next().unwrap_or(path))
+}
+
 fn print_usage() {
     println!(
         "\
@@ -182,6 +218,8 @@ COMMANDS:
   search <query>        Search note titles and bodies
   links <path>          List resolved outgoing wikilinks
   backlinks <path>      List incoming backlinks
+  related <path>        List linked notes as <in|out> TAB <path> TAB <title>,
+                        incoming first in reverse path order (newest sprint first)
   orphans               List notes with no incoming links
   deadends              List notes with no outgoing links
   unresolved            List broken/unresolved wikilinks

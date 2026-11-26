@@ -11,7 +11,6 @@ pub const FONT_SEMIBOLD: &str = "inter-semibold";
 pub struct Palette {
     pub canvas: Color32,
     pub bg_editor: Color32,
-    pub bg_sidebar: Color32,
     pub bg_elevated: Color32,
     pub bg_code: Color32,
     pub border: Color32,
@@ -33,7 +32,6 @@ impl Palette {
         Self {
             canvas: Color32::from_rgb(16, 17, 20),
             bg_editor: Color32::from_rgb(24, 25, 29),
-            bg_sidebar: Color32::from_rgb(24, 25, 29),
             bg_elevated: Color32::from_rgb(34, 36, 42),
             bg_code: Color32::from_rgb(30, 32, 37),
             border: Color32::from_rgb(42, 44, 51),
@@ -55,7 +53,6 @@ impl Palette {
         Self {
             canvas: Color32::from_rgb(238, 239, 242),
             bg_editor: Color32::from_rgb(255, 255, 255),
-            bg_sidebar: Color32::from_rgb(255, 255, 255),
             bg_elevated: Color32::from_rgb(243, 244, 246),
             bg_code: Color32::from_rgb(243, 244, 246),
             border: Color32::from_rgb(227, 229, 234),

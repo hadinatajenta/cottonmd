@@ -1,5 +1,5 @@
 use eframe::egui::{
-    self, Align2, Color32, CornerRadius, Frame, Margin, Rect, Response, RichText, Sense, Shadow,
+    self, Align2, CornerRadius, Frame, Margin, Rect, Response, RichText, Sense, Shadow,
     Stroke, StrokeKind, Ui, Vec2,
 };
 
@@ -164,23 +164,6 @@ pub fn search_field(
             pal.text_muted,
         );
     }
-    response
-}
-
-pub fn toggle_switch(ui: &mut Ui, pal: Palette, is_on: &mut bool) -> Response {
-    let size = Vec2::new(34.0, 20.0);
-    let (rect, mut response) = ui.allocate_exact_size(size, Sense::click());
-    if response.clicked() {
-        *is_on = !*is_on;
-        response.mark_changed();
-    }
-    let progress = ui.ctx().animate_bool(response.id, *is_on);
-    let track_color = if *is_on { pal.accent } else { pal.border_strong };
-    ui.painter()
-        .rect_filled(rect, CornerRadius::same(10), track_color);
-    let knob_x = egui::lerp((rect.left() + 10.0)..=(rect.right() - 10.0), progress);
-    ui.painter()
-        .circle_filled(egui::pos2(knob_x, rect.center().y), 7.5, Color32::WHITE);
     response
 }
 

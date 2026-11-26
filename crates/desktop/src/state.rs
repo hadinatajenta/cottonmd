@@ -1,5 +1,4 @@
-use std::collections::BTreeMap;
-use std::fs;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use cottonmd_canvas::CanvasDocument;
@@ -7,6 +6,9 @@ use cottonmd_graph::VaultGraph;
 use cottonmd_markdown::{parse_note, ParsedNote};
 use cottonmd_search::{IndexedDocument, SearchHit, SearchIndex};
 use cottonmd_vault::{EntryKind, Vault, VaultFile};
+
+use crate::file_tree::{toggle_collapsed, FolderTreeNode};
+use crate::vault_config::{load_last_vault_path, save_last_vault_path};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LeftTab {
@@ -32,30 +34,6 @@ pub enum CenterMode {
     Canvas,
 }
 
-#[derive(Default)]
-pub struct FolderTreeNode {
-    pub subfolders: BTreeMap<String, FolderTreeNode>,
-    pub files: Vec<String>,
-}
-
-impl FolderTreeNode {
-    fn insert(&mut self, relative_path: &str) {
-        let parts: Vec<&str> = relative_path.split('/').collect();
-        if parts.len() <= 1 {
-            self.files.push(relative_path.to_string());
-            return;
-        }
-        let mut cursor = self;
-        for dir in &parts[..parts.len() - 1] {
-            cursor = cursor
-                .subfolders
-                .entry((*dir).to_string())
-                .or_default();
-        }
-        cursor.files.push(relative_path.to_string());
-    }
-}
-
 pub struct AppState {
     pub dark_mode: bool,
     pub show_left_sidebar: bool,
@@ -71,6 +49,7 @@ pub struct AppState {
     pub graph: VaultGraph,
     pub search_index: SearchIndex,
     pub folder_tree: FolderTreeNode,
+    pub collapsed_folders: BTreeSet<String>,
 
     pub active_path: Option<String>,
     pub editor_buffer: String,
@@ -86,6 +65,8 @@ pub struct AppState {
     pub show_quick_switcher: bool,
     pub quick_switcher_query: String,
     pub quick_switcher_focus_needed: bool,
+    pub quick_switcher_selected: usize,
+    pub should_focus_file_filter: bool,
 
     pub show_new_note_dialog: bool,
     pub new_note_name: String,
@@ -110,6 +91,7 @@ impl AppState {
             graph: VaultGraph::default(),
             search_index: SearchIndex::default(),
             folder_tree: FolderTreeNode::default(),
+            collapsed_folders: BTreeSet::new(),
             active_path: None,
             editor_buffer: String::new(),
             saved_buffer: String::new(),
@@ -122,6 +104,8 @@ impl AppState {
             show_quick_switcher: false,
             quick_switcher_query: String::new(),
             quick_switcher_focus_needed: false,
+            quick_switcher_selected: 0,
+            should_focus_file_filter: false,
             show_new_note_dialog: false,
             new_note_name: String::new(),
             status_message: None,
@@ -139,6 +123,35 @@ impl AppState {
         state
     }
 
+    pub fn vault_name(&self) -> String {
+        self.vault
+            .as_ref()
+            .and_then(|vault| vault.root().file_name())
+            .map_or_else(|| "No vault".to_string(), |name| name.to_string_lossy().to_string())
+    }
+
+    pub fn open_quick_switcher(&mut self) {
+        self.show_quick_switcher = true;
+        self.quick_switcher_query.clear();
+        self.quick_switcher_selected = 0;
+        self.quick_switcher_focus_needed = true;
+    }
+
+    pub fn open_new_note_dialog(&mut self) {
+        self.show_new_note_dialog = true;
+        self.new_note_name.clear();
+    }
+
+    pub fn toggle_folder(&mut self, folder_path: &str) {
+        toggle_collapsed(&mut self.collapsed_folders, folder_path);
+    }
+
+    pub fn focus_file_filter(&mut self) {
+        self.show_left_sidebar = true;
+        self.left_tab = LeftTab::Files;
+        self.should_focus_file_filter = true;
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.active_path.is_some() && self.editor_buffer != self.saved_buffer
     }
@@ -146,7 +159,9 @@ impl AppState {
     pub fn open_vault(&mut self, dir: &Path) {
         match Vault::open(dir) {
             Ok(v) => {
-                save_last_vault_path(v.root());
+                if let Err(err) = save_last_vault_path(v.root()) {
+                    eprintln!("Could not remember last vault: {err}");
+                }
                 self.vault = Some(v);
                 self.active_path = None;
                 self.editor_buffer.clear();
@@ -435,49 +450,28 @@ pub fn resolve_link_in_files(files: &[VaultFile], target: &str) -> Option<String
     None
 }
 
-fn config_file_path() -> Option<PathBuf> {
-    #[cfg(target_os = "windows")]
-    {
-        let base = std::env::var_os("APPDATA").map(PathBuf::from).or_else(|| {
-            std::env::var_os("USERPROFILE")
-                .map(|h| PathBuf::from(h).join("AppData").join("Roaming"))
-        })?;
-        return Some(base.join("CottonMD").join("last_vault.txt"));
+pub fn move_selection(current: usize, step: isize, entry_count: usize) -> usize {
+    if entry_count == 0 {
+        return 0;
     }
-
-    #[cfg(target_os = "macos")]
-    {
-        let home = std::env::var_os("HOME")?;
-        return Some(
-            PathBuf::from(home)
-                .join("Library")
-                .join("Application Support")
-                .join("CottonMD")
-                .join("last_vault.txt"),
-        );
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        let base = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
-        return Some(base.join("cottonmd").join("last_vault.txt"));
-    }
+    let last_index = entry_count - 1;
+    current.saturating_add_signed(step).min(last_index)
 }
 
-fn load_last_vault_path() -> Option<PathBuf> {
-    let path = config_file_path()?;
-    let raw = fs::read_to_string(path).ok()?;
-    let p = PathBuf::from(raw.trim());
-    p.is_dir().then_some(p)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-fn save_last_vault_path(vault_root: &Path) {
-    if let Some(cfg) = config_file_path() {
-        if let Some(parent) = cfg.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let _ = fs::write(cfg, vault_root.to_string_lossy().as_bytes());
+    #[test]
+    fn move_selection_clamps_at_both_ends() {
+        assert_eq!(move_selection(0, -1, 5), 0);
+        assert_eq!(move_selection(4, 1, 5), 4);
+        assert_eq!(move_selection(2, 1, 5), 3);
+        assert_eq!(move_selection(2, -1, 5), 1);
+    }
+
+    #[test]
+    fn move_selection_with_no_entries_stays_at_zero() {
+        assert_eq!(move_selection(3, 1, 0), 0);
     }
 }

@@ -1,22 +1,25 @@
-use std::collections::HashMap;
+use eframe::egui::{self, vec2, CornerRadius, Layout, Response, Sense, Stroke, Ui, Vec2};
 
-use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Sense, Stroke, Vec2};
+mod paint;
+mod simulation;
 
+use paint::{show_legend, GraphPaint};
+use simulation::{build_graph, hit_radius, step_physics, EdgeList, SimNode};
+
+use crate::canvas_view::viewport::{sanitize_pan, sanitize_zoom, zoom_after_scroll, Viewport};
 use crate::state::AppState;
-use crate::theme::Palette;
+use crate::theme::{Palette, RADIUS_CARD};
+use crate::ui_kit::{empty_state, icon_button, paint_dot_grid, search_field};
 
-struct SimNode {
-    path: String,
-    label: String,
-    pos: Vec2,
-    vel: Vec2,
-    degree: usize,
-}
+const MIN_ZOOM: f32 = 0.25;
+const MAX_ZOOM: f32 = 3.5;
+const RESTING_ENERGY: f32 = 0.04;
+const SEARCH_WIDTH: f32 = 220.0;
 
 pub struct GraphViewState {
     revision: u64,
     nodes: Vec<SimNode>,
-    edges: Vec<(usize, usize)>,
+    edges: EdgeList,
     pan: Vec2,
     zoom: f32,
     dragging_node: Option<usize>,
@@ -45,299 +48,145 @@ impl GraphViewState {
             return;
         }
         self.revision = state.graph_revision;
-
-        let mut old_pos: HashMap<String, Vec2> = HashMap::new();
-        for n in &self.nodes {
-            old_pos.insert(n.path.clone(), n.pos);
-        }
-
-        let md_files: Vec<_> = state
-            .files
-            .iter()
-            .filter(|f| f.kind == cottonmd_vault::EntryKind::Markdown)
-            .collect();
-
-        let count = md_files.len().max(1) as f32;
-        let radius = (count.sqrt() * 55.0).clamp(80.0, 380.0);
-
-        let mut idx_by_path = HashMap::new();
-        let mut nodes = Vec::with_capacity(md_files.len());
-
-        for (i, f) in md_files.iter().enumerate() {
-            let angle = (i as f32 / count) * std::f32::consts::TAU;
-            let pos = old_pos.get(&f.relative_path).copied().unwrap_or_else(|| {
-                Vec2::new(angle.cos() * radius, angle.sin() * radius)
-            });
-            idx_by_path.insert(f.relative_path.clone(), i);
-            nodes.push(SimNode {
-                path: f.relative_path.clone(),
-                label: f.stem.clone(),
-                pos,
-                vel: Vec2::ZERO,
-                degree: 0,
-            });
-        }
-
-        let mut edges = Vec::new();
-        for (i, node) in nodes.iter().enumerate() {
-            for target in state.graph.outgoing_links(&node.path) {
-                if let Some(&j) = idx_by_path.get(target) {
-                    if i != j {
-                        edges.push((i, j));
-                    }
-                }
-            }
-        }
-
-        for &(a, b) in &edges {
-            nodes[a].degree += 1;
-            nodes[b].degree += 1;
-        }
-
+        let (nodes, edges) = build_graph(state, &self.nodes);
         self.nodes = nodes;
         self.edges = edges;
         self.dragging_node = None;
         self.energy = 1.0;
     }
 
-    fn step_physics(&mut self) {
-        let n = self.nodes.len();
-        if n == 0 || self.energy < 0.01 {
-            return;
-        }
-
-        let mut forces = vec![Vec2::ZERO; n];
-        let repulsion = 2800.0_f32;
-        let spring_k = 0.018_f32;
-        let ideal_len = 95.0_f32;
-        let gravity = 0.012_f32;
-
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let delta = self.nodes[i].pos - self.nodes[j].pos;
-                let dist_sq = delta.length_sq().max(25.0);
-                let dist = dist_sq.sqrt();
-                let dir = delta / dist;
-                let f = dir * (repulsion / dist_sq);
-                forces[i] += f;
-                forces[j] -= f;
-            }
-        }
-
-        for &(a, b) in &self.edges {
-            let delta = self.nodes[b].pos - self.nodes[a].pos;
-            let dist = delta.length().max(1.0);
-            let displacement = dist - ideal_len;
-            let f = (delta / dist) * (displacement * spring_k);
-            forces[a] += f;
-            forces[b] -= f;
-        }
-
-        let mut total_speed = 0.0_f32;
-        for (i, node) in self.nodes.iter_mut().enumerate() {
-            if self.dragging_node == Some(i) {
-                node.vel = Vec2::ZERO;
-                continue;
-            }
-            forces[i] -= node.pos * gravity;
-            node.vel = (node.vel + forces[i] * 0.45) * 0.82;
-            let speed = node.vel.length();
-            if speed > 16.0 {
-                node.vel = node.vel / speed * 16.0;
-            }
-            node.pos += node.vel;
-            total_speed += speed;
-        }
-
-        self.energy = total_speed / (n as f32);
-    }
-
-    pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, pal: Palette) -> Option<String> {
+    pub fn ui(&mut self, ui: &mut Ui, state: &AppState, pal: Palette) -> Option<String> {
         self.sync_from_state(state);
-
-        let mut clicked_path = None;
-
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Graph").strong().color(pal.text_primary));
-            ui.separator();
-            ui.add(
-                egui::TextEdit::singleline(&mut self.filter)
-                    .hint_text("Filter nodes...")
-                    .desired_width(180.0),
-            );
-            if ui.button("Reset view").clicked() {
-                self.pan = Vec2::ZERO;
-                self.zoom = 1.0;
-            }
-            if ui.button("Re-layout").clicked() {
-                self.energy = 1.0;
-            }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.label(
-                    egui::RichText::new(format!(
-                        "{} nodes  |  {} links",
-                        self.nodes.len(),
-                        self.edges.len()
-                    ))
-                    .size(11.5)
-                    .color(pal.text_muted),
-                );
-            });
-        });
-        ui.separator();
-
+        self.zoom = sanitize_zoom(self.zoom, MIN_ZOOM, MAX_ZOOM, 1.0);
+        self.pan = sanitize_pan(self.pan);
+        self.show_toolbar(ui, pal);
+        ui.add_space(8.0);
         if self.nodes.is_empty() {
-            ui.centered_and_justified(|ui| {
-                ui.label(
-                    egui::RichText::new("No markdown notes to graph. Open a vault or create a note.")
-                        .color(pal.text_muted),
-                );
-            });
+            empty_state(
+                ui,
+                pal,
+                egui_phosphor::regular::GRAPH,
+                "No markdown notes to graph. Open a vault or create a note.",
+            );
             return None;
         }
-
-        if self.energy >= 0.04 || self.dragging_node.is_some() {
-            self.step_physics();
+        if self.energy >= RESTING_ENERGY || self.dragging_node.is_some() {
+            self.energy = step_physics(&mut self.nodes, &self.edges, self.dragging_node);
             ui.ctx().request_repaint();
         }
+        self.show_canvas(ui, state, pal)
+    }
 
-        let avail = ui.available_size();
-        let (rect, response) = ui.allocate_exact_size(avail, Sense::click_and_drag());
-        let painter = ui.painter_at(rect);
-        painter.rect_filled(rect, 0.0, pal.bg_editor);
-
-        if response.hovered() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll.abs() > 0.01 {
-                let factor = (1.0 + scroll * 0.002).clamp(0.8, 1.25);
-                self.zoom = (self.zoom * factor).clamp(0.25, 3.5);
-            }
-        }
-
-        let center = rect.center() + self.pan;
-        let to_screen = |world: Vec2| -> Pos2 { center + world * self.zoom };
-        let to_world = |screen: Pos2| -> Vec2 { (screen - center) / self.zoom };
-
-        let pointer_pos = response.hover_pos();
-        let hovered_node = pointer_pos.and_then(|p| {
-            self.nodes.iter().enumerate().find_map(|(i, n)| {
-                let r = (5.0 + (n.degree as f32).sqrt() * 2.5) * self.zoom;
-                let sp = to_screen(n.pos);
-                (sp.distance(p) <= r.max(8.0)).then_some(i)
-            })
+    fn show_toolbar(&mut self, ui: &mut Ui, pal: Palette) {
+        ui.horizontal(|ui| {
+            ui.allocate_ui(vec2(SEARCH_WIDTH, 32.0), |ui| {
+                search_field(ui, pal, &mut self.filter, "Filter nodes...", "");
+            });
+            ui.with_layout(Layout::right_to_left(egui::Align::Center), |ui| {
+                if icon_button(
+                    ui,
+                    pal,
+                    egui_phosphor::regular::ARROWS_CLOCKWISE,
+                    "Re-layout",
+                )
+                .clicked()
+                {
+                    self.energy = 1.0;
+                }
+                if icon_button(ui, pal, egui_phosphor::regular::CROSSHAIR, "Reset view").clicked() {
+                    self.pan = Vec2::ZERO;
+                    self.zoom = 1.0;
+                }
+            });
         });
+    }
 
+    fn show_canvas(&mut self, ui: &mut Ui, state: &AppState, pal: Palette) -> Option<String> {
+        let (rect, response) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
+        self.apply_scroll_zoom(ui, &response);
+        let viewport = Viewport::new(rect, self.pan, self.zoom);
+        ui.painter().rect(
+            rect,
+            CornerRadius::same(RADIUS_CARD),
+            pal.canvas,
+            Stroke::new(1.0, pal.border),
+            egui::StrokeKind::Inside,
+        );
+        paint_dot_grid(ui, pal, rect, viewport.grid_offset(rect));
+        let hovered_index = self.hovered_node_index(&response, &viewport);
+        let clicked_path = self.apply_pointer(&response, &viewport, hovered_index);
+        let lowercase_filter = self.filter.trim().to_ascii_lowercase();
+        let graph_paint = GraphPaint {
+            painter: ui.painter_at(rect),
+            pal,
+            viewport,
+            rect,
+            active_path: state.active_path.as_deref(),
+            hovered_index,
+            lowercase_filter: &lowercase_filter,
+        };
+        graph_paint.draw_edges(&self.nodes, &self.edges);
+        graph_paint.draw_nodes(&self.nodes);
+        if hovered_index.is_some() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        show_legend(
+            ui,
+            pal,
+            rect,
+            self.nodes.len(),
+            self.edges.len(),
+            hovered_index.map(|index| &self.nodes[index]),
+        );
+        clicked_path
+    }
+
+    fn apply_scroll_zoom(&mut self, ui: &Ui, response: &Response) {
+        if !response.hovered() {
+            return;
+        }
+        let scroll = ui.input(|input| input.smooth_scroll_delta.y);
+        if scroll.abs() > 0.01 {
+            self.zoom = zoom_after_scroll(self.zoom, scroll, MIN_ZOOM, MAX_ZOOM);
+        }
+    }
+
+    fn hovered_node_index(&self, response: &Response, viewport: &Viewport) -> Option<usize> {
+        let pointer = response.hover_pos()?;
+        self.nodes.iter().position(|node| {
+            viewport.to_screen(node.pos).distance(pointer) <= hit_radius(node.degree, viewport.zoom)
+        })
+    }
+
+    fn apply_pointer(
+        &mut self,
+        response: &Response,
+        viewport: &Viewport,
+        hovered_index: Option<usize>,
+    ) -> Option<String> {
         if response.drag_started() {
-            if let Some(idx) = hovered_node {
-                self.dragging_node = Some(idx);
-            }
+            self.dragging_node = hovered_index;
         }
         if response.dragged() {
-            if let Some(idx) = self.dragging_node {
-                if let Some(p) = response.interact_pointer_pos() {
-                    self.nodes[idx].pos = to_world(p);
-                    self.energy = 0.5;
-                }
-            } else {
-                self.pan += response.drag_delta();
-            }
+            self.drag_selection(response, viewport);
         }
         if response.drag_stopped() {
             self.dragging_node = None;
         }
         if response.clicked() {
-            if let Some(idx) = hovered_node {
-                clicked_path = Some(self.nodes[idx].path.clone());
-            }
+            return hovered_index.map(|index| self.nodes[index].path.clone());
         }
+        None
+    }
 
-        let filter_q = self.filter.trim().to_ascii_lowercase();
-        let active_path = state.active_path.as_deref();
-
-        for &(a, b) in &self.edges {
-            let pa = to_screen(self.nodes[a].pos);
-            let pb = to_screen(self.nodes[b].pos);
-            let highlighted = hovered_node == Some(a)
-                || hovered_node == Some(b)
-                || active_path == Some(self.nodes[a].path.as_str())
-                || active_path == Some(self.nodes[b].path.as_str());
-            let stroke = if highlighted {
-                Stroke::new(1.5, pal.accent)
-            } else {
-                Stroke::new(1.0, pal.border)
-            };
-            painter.line_segment([pa, pb], stroke);
+    fn drag_selection(&mut self, response: &Response, viewport: &Viewport) {
+        let Some(index) = self.dragging_node else {
+            self.pan = sanitize_pan(self.pan + response.drag_delta());
+            return;
+        };
+        if let Some(pointer) = response.interact_pointer_pos() {
+            self.nodes[index].pos = viewport.to_world(pointer);
+            self.energy = 0.5;
         }
-
-        for (i, node) in self.nodes.iter().enumerate() {
-            let matches_filter = filter_q.is_empty()
-                || node.label.to_ascii_lowercase().contains(&filter_q)
-                || node.path.to_ascii_lowercase().contains(&filter_q);
-
-            let sp = to_screen(node.pos);
-            if !rect.expand(40.0).contains(sp) {
-                continue;
-            }
-            let r = (4.5 + (node.degree as f32).sqrt() * 2.2) * self.zoom;
-            let is_active = active_path == Some(node.path.as_str());
-            let is_hovered = hovered_node == Some(i);
-
-            let fill = if is_active || is_hovered {
-                pal.accent
-            } else if matches_filter {
-                pal.text_muted
-            } else {
-                Color32::from_rgba_unmultiplied(
-                    pal.border.r(),
-                    pal.border.g(),
-                    pal.border.b(),
-                    110,
-                )
-            };
-
-            painter.circle_filled(sp, r, fill);
-            if is_active {
-                painter.circle_stroke(sp, r + 2.5, Stroke::new(1.5, pal.accent));
-            }
-
-            if self.zoom >= 0.7 || is_active || is_hovered || !filter_q.is_empty() && matches_filter {
-                let text_color = if is_active || is_hovered {
-                    pal.text_primary
-                } else if matches_filter {
-                    pal.text_muted
-                } else {
-                    Color32::from_rgba_unmultiplied(
-                        pal.text_muted.r(),
-                        pal.text_muted.g(),
-                        pal.text_muted.b(),
-                        70,
-                    )
-                };
-                painter.text(
-                    sp + Vec2::new(0.0, r + 4.0),
-                    Align2::CENTER_TOP,
-                    &node.label,
-                    FontId::proportional((11.5 * self.zoom.clamp(0.8, 1.3)).min(14.0)),
-                    text_color,
-                );
-            }
-        }
-
-        if let Some(idx) = hovered_node {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-            let n = &self.nodes[idx];
-            let tip_rect = Rect::from_min_size(rect.min + Vec2::new(12.0, 12.0), Vec2::new(260.0, 24.0));
-            painter.rect_filled(tip_rect, 4.0, pal.bg_elevated);
-            painter.rect_stroke(tip_rect, 4.0, Stroke::new(1.0, pal.border), egui::StrokeKind::Inside);
-            painter.text(
-                tip_rect.left_center() + Vec2::new(8.0, 0.0),
-                Align2::LEFT_CENTER,
-                format!("{} ({} links)", n.path, n.degree),
-                FontId::proportional(11.5),
-                pal.text_primary,
-            );
-        }
-
-        clicked_path
     }
 }

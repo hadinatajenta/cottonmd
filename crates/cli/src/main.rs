@@ -27,7 +27,7 @@ fn run() -> Result<(), String> {
 
     let mut vault_path = env::current_dir().map_err(|e| e.to_string())?;
     let mut pos = 0;
-    if args.get(0).map(String::as_str) == Some("--vault") {
+    if args.first().map(String::as_str) == Some("--vault") {
         let dir = args
             .get(1)
             .ok_or_else(|| "missing directory after --vault".to_string())?;

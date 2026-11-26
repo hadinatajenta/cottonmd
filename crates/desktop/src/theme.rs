@@ -143,8 +143,7 @@ pub fn apply_theme(ctx: &egui::Context, dark: bool) -> Palette {
     visuals.window_corner_radius = CornerRadius::same(RADIUS_CARD);
     visuals.window_stroke = Stroke::new(1.0, pal.border);
 
-    let mut style = Style::default();
-    style.visuals = visuals;
+    let mut style = Style { visuals, ..Style::default() };
     style.spacing.item_spacing = egui::vec2(8.0, 6.0);
     style.spacing.button_padding = egui::vec2(8.0, 4.0);
     style.spacing.window_margin = egui::Margin::same(12);

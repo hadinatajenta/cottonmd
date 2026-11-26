@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-bases"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cottonmd-markdown",
  "cottonmd-vault",
@@ -643,7 +643,7 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-canvas"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-cli"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cottonmd-bases",
  "cottonmd-graph",
@@ -662,7 +662,7 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cottonmd-bases",
  "cottonmd-canvas",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-graph"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cottonmd-markdown",
  "cottonmd-vault",
@@ -686,15 +686,15 @@ dependencies = [
 
 [[package]]
 name = "cottonmd-markdown"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "cottonmd-search"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "cottonmd-vault"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",

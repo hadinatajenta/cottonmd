@@ -1,13 +1,13 @@
 [Setup]
 AppId={{8D6B6A79-4A3E-4C3B-9C9C-73A69E7F2A11}
 AppName=CottonMD
-AppVersion=0.1.0
+AppVersion=0.2.0
 AppPublisher=CottonMD
 DefaultDirName={autopf}\CottonMD
 DefaultGroupName=CottonMD
 DisableProgramGroupPage=yes
 OutputDir=..\dist
-OutputBaseFilename=CottonMD-Setup-0.1.0-x64
+OutputBaseFilename=CottonMD-Setup-0.2.0-x64
 SetupIconFile=..\assets\AppIcon.ico
 UninstallDisplayIcon={app}\CottonMD.exe
 Compression=lzma2

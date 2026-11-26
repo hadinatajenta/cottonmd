@@ -52,8 +52,8 @@ jobs:
               <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
               <key>CFBundleName</key><string>CottonMD</string>
               <key>CFBundlePackageType</key><string>APPL</string>
-              <key>CFBundleShortVersionString</key><string>0.1.0</string>
-              <key>CFBundleVersion</key><string>1</string>
+              <key>CFBundleShortVersionString</key><string>0.2.0</string>
+              <key>CFBundleVersion</key><string>2</string>
               <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
               <key>LSMinimumSystemVersion</key><string>12.0</string>
               <key>NSHighResolutionCapable</key><true/>
@@ -118,13 +118,13 @@ jobs:
           Lightweight desktop PKM application written in pure Rust (`egui` + `eframe`), without Electron or WebView.
 
           ### Highlights
-          - **Local-first Markdown Vault:** Hierarchical file explorer, native OS folder picker, Quick Switcher (`Cmd/Ctrl+K`), Global Search, Tags, and Inspector (Backlinks, Outgoing/Unresolved Links, Outline, YAML Properties, interactive Tasks).
-          - **Editor, Split & Preview (`Cmd/Ctrl+E`):** Clean writing surface with native preview for headings, YAML properties, callouts, code blocks, clickable `[[wikilinks]]`, `#tags`, and interactive task checkboxes.
-          - **Interactive Graph View (`Cmd/Ctrl+G`):** Force-directed physics with pan, zoom, node dragging, and click-to-open.
-          - **Bases Table (`Cmd/Ctrl+B`):** Filterable, sortable tabular view over vault notes with CSV export.
-          - **JSON Canvas Viewer (`.canvas`):** Pan/zoom renderer for JSON Canvas 1.0 documents.
-          - **Companion CLI (`cottonmd-cli`):** Bundled headless CLI for scripting vault queries.
-          - **Custom Liquid Glass Icon:** Native Retina `AppIcon.icns` (macOS) & multi-resolution `AppIcon.ico` (Windows).
+          - **Refreshed UI & Typography:** Modern floating-card shell, Inter & Phosphor icon fonts, underline tabs, tree view with indent guides, and command-palette Quick Switcher (`Cmd/Ctrl+P` / `Cmd/Ctrl+K`).
+          - **Local-First Markdown Vault:** Native OS folder picker (`Cmd/Ctrl+O`), Global Search, Tags, Vault Scope (`.cottonmd/vault.json`), and Inspector (Backlinks, Outgoing/Unresolved Links, Outline, YAML Properties, interactive Tasks).
+          - **Editor, Split & Preview (`Cmd/Ctrl+E`):** Clean writing surface with native preview for headings, YAML properties, callouts, tables, code blocks, clickable `[[wikilinks]]` and relative `[text](path.md)` Markdown links, `#tags`, and interactive task checkboxes.
+          - **Interactive Graph View (`Cmd/Ctrl+G`):** Force-directed physics resolving both wikilinks and relative Markdown links, with pan, zoom, node dragging, and click-to-open.
+          - **Bases Table (`Cmd/Ctrl+B`) & JSON Canvas Viewer (`.canvas`):** Filterable, sortable tabular view with CSV export and pan/zoom renderer for JSON Canvas 1.0 documents.
+          - **Companion CLI (`cottonmd-cli`):** Bundled headless CLI for scripting vault queries and coding agents (`related`, `search`, `links`, `backlinks`, `tasks`, etc.).
+          - **HD Liquid Glass App Icon:** Native Retina `AppIcon.icns` (macOS, no longer downscaled at runtime), multi-resolution `AppIcon.ico` (Windows), and 256×256 fallback runtime icon (Windows/Linux).
 
           ### Downloads
           - **macOS (Apple Silicon):** `CottonMD-macos-arm64.dmg` or `CottonMD-macos-arm64.zip`

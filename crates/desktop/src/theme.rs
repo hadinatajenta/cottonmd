@@ -100,15 +100,17 @@ fn build_font_definitions() -> egui::FontDefinitions {
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
-    let icons_then = |primary: &[&str]| -> Vec<String> {
-        std::iter::once(FONT_ICONS)
-            .chain(primary.iter().copied())
+    let text_then_icons = |primary: &[&str]| -> Vec<String> {
+        primary
+            .iter()
+            .copied()
+            .chain(std::iter::once(FONT_ICONS))
             .map(str::to_owned)
             .chain(default_fallbacks.iter().cloned())
             .collect()
     };
-    let proportional_chain = icons_then(&[FONT_REGULAR]);
-    let semibold_chain = icons_then(&[FONT_SEMIBOLD, FONT_REGULAR]);
+    let proportional_chain = text_then_icons(&[FONT_REGULAR]);
+    let semibold_chain = text_then_icons(&[FONT_SEMIBOLD, FONT_REGULAR]);
     fonts
         .families
         .insert(FontFamily::Proportional, proportional_chain);
@@ -172,40 +174,61 @@ pub fn apply_theme(ctx: &egui::Context, dark: bool) -> Palette {
 mod tests {
     use super::*;
 
-    fn family_chain(family: FontFamily) -> Vec<String> {
-        build_font_definitions()
-            .families
-            .get(&family)
-            .cloned()
-            .unwrap_or_default()
+    const ICON_FONT_SIZE: f32 = 16.0;
+
+    fn with_installed_fonts<R>(measure: impl FnOnce(&egui::text::Fonts) -> R) -> R {
+        let ctx = egui::Context::default();
+        ctx.set_fonts(build_font_definitions());
+        let _ = ctx.run(egui::RawInput::default(), |_| {});
+        ctx.fonts(measure)
+    }
+
+    fn text_width(fonts: &egui::text::Fonts, text: &str, font_id: FontId) -> f32 {
+        fonts
+            .layout_no_wrap(text.to_owned(), font_id, Color32::WHITE)
+            .size()
+            .x
     }
 
     #[test]
-    fn icon_font_precedes_inter_so_private_use_glyphs_resolve_to_icons() {
-        let proportional = family_chain(FontFamily::Proportional);
-        assert_eq!(proportional.first().map(String::as_str), Some(FONT_ICONS));
-        assert_eq!(proportional.get(1).map(String::as_str), Some(FONT_REGULAR));
+    fn lowercase_text_and_spaces_have_visible_width_in_every_family() {
+        with_installed_fonts(|fonts| {
+            for font_id in [FontId::proportional(14.0), semibold(14.0)] {
+                let single_letter_width = text_width(fonts, "I", font_id.clone());
+                let word_width = text_width(fonts, "Ideas and notes", font_id);
+                assert!(word_width > single_letter_width * 8.0);
+            }
+        });
     }
 
     #[test]
-    fn semibold_family_keeps_icon_font_and_falls_back_to_regular() {
-        let semibold_chain = family_chain(FontFamily::Name(FONT_SEMIBOLD.into()));
-        assert_eq!(
-            semibold_chain.iter().take(3).map(String::as_str).collect::<Vec<_>>(),
-            vec![FONT_ICONS, FONT_SEMIBOLD, FONT_REGULAR]
-        );
+    fn icons_render_from_the_icon_font_in_every_family() {
+        with_installed_fonts(|fonts| {
+            for font_id in [FontId::proportional(ICON_FONT_SIZE), semibold(ICON_FONT_SIZE)] {
+                for icon in [
+                    egui_phosphor::regular::FILE_TEXT,
+                    egui_phosphor::regular::FOLDER,
+                    egui_phosphor::regular::CARET_RIGHT,
+                    egui_phosphor::regular::COLUMNS,
+                    egui_phosphor::regular::FLOPPY_DISK,
+                ] {
+                    let icon_width = text_width(fonts, icon, font_id.clone());
+                    assert!((icon_width - ICON_FONT_SIZE).abs() < 1.0, "{icon:?} width {icon_width}");
+                }
+            }
+        });
     }
 
     #[test]
-    fn default_emoji_fallbacks_are_preserved() {
-        let proportional = family_chain(FontFamily::Proportional);
-        let default_proportional = egui::FontDefinitions::default()
+    fn regular_text_font_precedes_icon_font() {
+        let definitions = build_font_definitions();
+        let proportional = definitions
             .families
             .get(&FontFamily::Proportional)
             .cloned()
             .unwrap_or_default();
-        assert!(default_proportional
-            .iter()
-            .all(|font_name| proportional.contains(font_name)));
+        let icon_position = proportional.iter().position(|name| name == FONT_ICONS);
+        let regular_position = proportional.iter().position(|name| name == FONT_REGULAR);
+        assert!(regular_position < icon_position);
     }
 }

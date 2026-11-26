@@ -1,5 +1,5 @@
 use cottonmd_markdown::is_external_link;
-use eframe::egui::{self, CornerRadius, Frame, Margin, RichText, Sense, Stroke, Ui};
+use eframe::egui::{self, CornerRadius, Frame, Margin, RichText, Sense, Stroke, Ui, WidgetText};
 
 use super::emphasis::{split_emphasis, Emphasis};
 use super::tokens::{tokenize_inline, InlineToken};
@@ -127,19 +127,34 @@ fn render_link(
     Some(PreviewAction::OpenRelativeLink(href.to_string()))
 }
 
+const CODE_CHIP_FONT_SIZE: f32 = 12.5;
+const CODE_CHIP_HORIZONTAL_MARGIN: i8 = 6;
+
 fn render_code_chip(ui: &mut Ui, pal: Palette, code: &str) {
+    let text = RichText::new(code)
+        .monospace()
+        .size(CODE_CHIP_FONT_SIZE)
+        .color(pal.text_primary);
+    let text_width = WidgetText::from(text.clone())
+        .into_galley(
+            ui,
+            Some(egui::TextWrapMode::Extend),
+            f32::INFINITY,
+            egui::TextStyle::Monospace,
+        )
+        .size()
+        .x;
+    let chip_width = text_width + f32::from(CODE_CHIP_HORIZONTAL_MARGIN) * 2.0 + 2.0;
+    if ui.available_width() < chip_width {
+        ui.end_row();
+    }
     Frame::new()
         .fill(pal.bg_elevated)
         .stroke(Stroke::new(1.0, pal.border))
         .corner_radius(CornerRadius::same(RADIUS_BADGE))
-        .inner_margin(Margin::symmetric(6, 1))
+        .inner_margin(Margin::symmetric(CODE_CHIP_HORIZONTAL_MARGIN, 1))
         .show(ui, |ui| {
-            ui.label(
-                RichText::new(code)
-                    .monospace()
-                    .size(12.5)
-                    .color(pal.text_primary),
-            );
+            ui.add(egui::Label::new(text).extend());
         });
 }
 

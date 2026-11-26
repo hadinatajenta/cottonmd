@@ -1,9 +1,18 @@
-use eframe::egui::{self, RichText};
-use cottonmd_bases::{export_csv, query_view, BaseViewKind, BaseViewSpec, FilterPredicate};
+use cottonmd_bases::{
+    export_csv, query_view, BaseRow, BaseViewKind, BaseViewSpec, FilterPredicate,
+};
 use cottonmd_vault::EntryKind;
+use eframe::egui::{self, RichText, Ui};
+
+mod table;
+
+use table::{show_header, show_row, SortRequest, ROW_HEIGHT};
 
 use crate::state::AppState;
 use crate::theme::Palette;
+use crate::ui_kit::{card_frame, empty_state, pill_badge, section_label};
+
+const COLUMN_IDS: [&str; 4] = ["file.name", "file.path", "file.tags", "file.size"];
 
 pub struct BasesViewState {
     pub folder_filter: String,
@@ -28,16 +37,27 @@ impl Default for BasesViewState {
 }
 
 impl BasesViewState {
-    pub fn ui(&mut self, ui: &mut egui::Ui, state: &AppState, pal: Palette) -> Option<String> {
-        let mut open_path = None;
+    pub fn ui(&mut self, ui: &mut Ui, state: &AppState, pal: Palette) -> Option<String> {
+        let columns: Vec<String> = COLUMN_IDS.iter().map(|id| (*id).to_owned()).collect();
+        let rows = self.query_rows(state, &columns);
+        self.show_toolbar(ui, pal, &columns, &rows);
+        if let Some(message) = &self.export_feedback {
+            ui.label(RichText::new(message).size(11.5).color(pal.accent));
+        }
+        ui.add_space(8.0);
+        if rows.is_empty() {
+            empty_state(
+                ui,
+                pal,
+                egui_phosphor::regular::TABLE,
+                "No notes match the current Base filters. Clear a filter to show vault notes.",
+            );
+            return None;
+        }
+        self.show_table(ui, pal, state, &rows)
+    }
 
-        let columns = vec![
-            "file.name".to_string(),
-            "file.path".to_string(),
-            "file.tags".to_string(),
-            "file.size".to_string(),
-        ];
-
+    fn collect_filters(&self) -> Vec<FilterPredicate> {
         let mut filters = Vec::new();
         if !self.folder_filter.trim().is_empty() {
             filters.push(FilterPredicate::FolderPrefix(
@@ -54,156 +74,132 @@ impl BasesViewState {
                 self.prop_key_filter.trim().to_string(),
             ));
         }
+        filters
+    }
 
+    fn query_rows(&self, state: &AppState, columns: &[String]) -> Vec<BaseRow> {
         let spec = BaseViewSpec {
             name: "Vault Base".into(),
             kind: BaseViewKind::Table,
-            columns: columns.clone(),
-            filters,
+            columns: columns.to_vec(),
+            filters: self.collect_filters(),
             sort_by: Some(self.sort_col.clone()),
             descending: self.descending,
         };
-
-        let items: Vec<_> = state
+        let notes: Vec<_> = state
             .files
             .iter()
-            .filter(|f| f.kind == EntryKind::Markdown)
-            .filter_map(|f| state.parsed_notes.get(&f.relative_path).map(|p| (f, p)))
+            .filter(|file| file.kind == EntryKind::Markdown)
+            .filter_map(|file| {
+                state
+                    .parsed_notes
+                    .get(&file.relative_path)
+                    .map(|parsed| (file, parsed))
+            })
             .collect();
+        query_view(&spec, &notes)
+    }
 
-        let rows = query_view(&spec, &items);
-
+    fn show_toolbar(&mut self, ui: &mut Ui, pal: Palette, columns: &[String], rows: &[BaseRow]) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Bases Table").strong().color(pal.text_primary));
-            ui.separator();
-            ui.label(RichText::new("Folder:").size(12.0).color(pal.text_muted));
-            ui.add(
-                egui::TextEdit::singleline(&mut self.folder_filter)
-                    .hint_text("e.g. Guides/")
-                    .desired_width(110.0),
+            section_label(ui, pal, "Bases");
+            pill_badge(ui, pal, &format!("{} rows", rows.len()));
+            ui.add_space(8.0);
+            filter_field(
+                ui,
+                pal,
+                "Folder",
+                "e.g. Guides/",
+                &mut self.folder_filter,
+                110.0,
             );
-            ui.label(RichText::new("Tag:").size(12.0).color(pal.text_muted));
-            ui.add(
-                egui::TextEdit::singleline(&mut self.tag_filter)
-                    .hint_text("e.g. project")
-                    .desired_width(100.0),
+            filter_field(ui, pal, "Tag", "e.g. project", &mut self.tag_filter, 100.0);
+            filter_field(
+                ui,
+                pal,
+                "Has property",
+                "e.g. status",
+                &mut self.prop_key_filter,
+                90.0,
             );
-            ui.label(RichText::new("Has property:").size(12.0).color(pal.text_muted));
-            ui.add(
-                egui::TextEdit::singleline(&mut self.prop_key_filter)
-                    .hint_text("e.g. status")
-                    .desired_width(90.0),
-            );
-            if ui.button("Export CSV").clicked() {
-                let csv = export_csv(&columns, &rows);
-                if let Some(save_path) = rfd::FileDialog::new()
-                    .set_file_name("cottonmd-base.csv")
-                    .add_filter("CSV", &["csv"])
-                    .save_file()
-                {
-                    match std::fs::write(&save_path, csv) {
-                        Ok(()) => {
-                            self.export_feedback =
-                                Some(format!("Exported {} rows to {}", rows.len(), save_path.display()));
-                        }
-                        Err(e) => {
-                            self.export_feedback = Some(format!("Export failed: {e}"));
-                        }
-                    }
-                }
+            let export_label = format!("{} Export CSV", egui_phosphor::regular::DOWNLOAD_SIMPLE);
+            if ui.button(export_label).clicked() {
+                self.export_rows(columns, rows);
             }
-            ui.label(
-                RichText::new(format!("{} rows", rows.len()))
-                    .size(11.5)
-                    .color(pal.text_muted),
-            );
         });
+    }
 
-        if let Some(ref msg) = self.export_feedback {
-            ui.label(RichText::new(msg).size(11.5).color(pal.accent));
-        }
+    fn export_rows(&mut self, columns: &[String], rows: &[BaseRow]) {
+        let csv = export_csv(columns, rows);
+        let Some(save_path) = rfd::FileDialog::new()
+            .set_file_name("cottonmd-base.csv")
+            .add_filter("CSV", &["csv"])
+            .save_file()
+        else {
+            return;
+        };
+        self.export_feedback = Some(match std::fs::write(&save_path, csv) {
+            Ok(()) => format!("Exported {} rows to {}", rows.len(), save_path.display()),
+            Err(error) => format!("Export failed: {error}"),
+        });
+    }
 
-        ui.separator();
-
-        if rows.is_empty() {
-            ui.centered_and_justified(|ui| {
-                ui.label(
-                    RichText::new("No notes match the current Base filters. Clear a filter to show vault notes.")
-                        .color(pal.text_muted),
-                );
-            });
-            return None;
-        }
-
-        egui::ScrollArea::both().show(ui, |ui| {
-            egui::Grid::new("bases_table_grid")
-                .striped(true)
-                .spacing([16.0, 6.0])
-                .min_col_width(100.0)
-                .show(ui, |ui| {
-                    for (col_id, heading) in [
-                        ("file.name", "Note"),
-                        ("file.path", "Path"),
-                        ("file.tags", "Tags"),
-                        ("file.size", "Bytes"),
-                    ] {
-                        let arrow = if self.sort_col == col_id {
-                            if self.descending { " v" } else { " ^" }
-                        } else {
-                            ""
-                        };
-                        if ui
-                            .button(RichText::new(format!("{heading}{arrow}")).strong())
-                            .clicked()
-                        {
-                            if self.sort_col == col_id {
-                                self.descending = !self.descending;
-                            } else {
-                                self.sort_col = col_id.to_string();
-                                self.descending = false;
-                            }
-                        }
-                    }
-                    ui.label(RichText::new("Links").strong().color(pal.text_muted));
-                    ui.label(RichText::new("Backlinks").strong().color(pal.text_muted));
-                    ui.end_row();
-
-                    for row in &rows {
-                        let resp = ui.add(
-                            egui::Label::new(
-                                RichText::new(&row.title).color(pal.accent).underline(),
-                            )
-                            .sense(egui::Sense::click()),
-                        );
-                        if resp.clicked() {
+    fn show_table(
+        &mut self,
+        ui: &mut Ui,
+        pal: Palette,
+        state: &AppState,
+        rows: &[BaseRow],
+    ) -> Option<String> {
+        let mut open_path = None;
+        let mut sort_request = None;
+        card_frame(pal).show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.spacing_mut().item_spacing.y = 0.0;
+            sort_request = show_header(ui, pal, &self.sort_col, self.descending);
+            ui.separator();
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show_rows(ui, ROW_HEIGHT, rows.len(), |ui, visible_range| {
+                    for row in &rows[visible_range] {
+                        if show_row(ui, pal, state, row) {
                             open_path = Some(row.path.clone());
                         }
-                        if resp.hovered() {
-                            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
-                        }
-
-                        ui.label(RichText::new(&row.path).size(12.0).color(pal.text_muted));
-                        let tags = row.values.get("file.tags").map(String::as_str).unwrap_or("");
-                        ui.label(RichText::new(tags).size(12.0).color(pal.text_primary));
-                        let size = row.values.get("file.size").map(String::as_str).unwrap_or("0");
-                        ui.label(RichText::new(size).monospace().size(12.0).color(pal.text_muted));
-                        ui.label(
-                            RichText::new(state.graph.outgoing_links(&row.path).len().to_string())
-                                .monospace()
-                                .size(12.0)
-                                .color(pal.text_muted),
-                        );
-                        ui.label(
-                            RichText::new(state.graph.backlinks(&row.path).len().to_string())
-                                .monospace()
-                                .size(12.0)
-                                .color(pal.text_muted),
-                        );
-                        ui.end_row();
                     }
                 });
         });
-
+        if let Some(request) = sort_request {
+            self.apply_sort(request);
+        }
         open_path
     }
+
+    fn apply_sort(&mut self, request: SortRequest) {
+        if self.sort_col == request.column_id {
+            self.descending = !self.descending;
+        } else {
+            self.sort_col = request.column_id.to_string();
+            self.descending = false;
+        }
+    }
+}
+
+fn filter_field(
+    ui: &mut Ui,
+    pal: Palette,
+    label: &str,
+    hint: &str,
+    value: &mut String,
+    width: f32,
+) {
+    ui.label(
+        RichText::new(format!("{label}:"))
+            .size(12.0)
+            .color(pal.text_muted),
+    );
+    ui.add(
+        egui::TextEdit::singleline(value)
+            .hint_text(hint)
+            .desired_width(width),
+    );
 }

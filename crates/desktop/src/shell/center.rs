@@ -155,7 +155,7 @@ fn draw_welcome(ui: &mut Ui, state: &mut AppState, pal: Palette) {
             let message = if state.vault.is_some() {
                 format!("Select a note from Files or press {MOD_KEY}+N to create one.")
             } else {
-                "Open a local Markdown vault folder to start writing.".to_string()
+                format!("Open a local Markdown vault folder ({MOD_KEY}+O) to start writing.")
             };
             ui.label(RichText::new(message).color(pal.text_muted));
             ui.add_space(12.0);

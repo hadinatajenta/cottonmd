@@ -77,7 +77,18 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(initial_vault: Option<PathBuf>) -> Self {
-        let mut state = Self {
+        let mut state = Self::empty();
+        let candidate = initial_vault.or_else(load_last_vault_path);
+        if let Some(path) = candidate {
+            if path.is_dir() {
+                state.open_vault(&path);
+            }
+        }
+        state
+    }
+
+    pub fn empty() -> Self {
+        Self {
             dark_mode: true,
             show_left_sidebar: true,
             show_right_sidebar: true,
@@ -110,17 +121,7 @@ impl AppState {
             new_note_name: String::new(),
             status_message: None,
             graph_revision: 0,
-        };
-
-        let candidate = initial_vault.or_else(load_last_vault_path);
-
-        if let Some(path) = candidate {
-            if path.is_dir() {
-                state.open_vault(&path);
-            }
         }
-
-        state
     }
 
     pub fn vault_name(&self) -> String {

@@ -4,7 +4,7 @@ Lightweight, local-first **Markdown Knowledge Workspace** built in pure **Rust**
 
 ## Features
 
-- **Local-First Vault & File Explorer:** Hierarchical folder tree, instant file filter, native OS folder picker (`Open Vault`), `New Note` (`Cmd/Ctrl+N`), and `Quick Switcher` (`Cmd/Ctrl+K` / `Cmd/Ctrl+O`).
+- **Local-First Vault & File Explorer:** Hierarchical folder tree, instant file filter, native OS folder picker (`Open Vault`, `Cmd/Ctrl+O`), `New Note` (`Cmd/Ctrl+N`), and `Quick Switcher` (`Cmd/Ctrl+P` / `Cmd/Ctrl+K`).
 - **Markdown Editor, Split & Preview (`Cmd/Ctrl+E`):** Clean writing surface with unsaved indicator, `Save` (`Cmd/Ctrl+S`), and a native preview rendering headings (`H1–H6`), YAML frontmatter properties, callouts (`> [!note]`), fenced code blocks, clickable `[[wikilinks]]` (navigate or create notes), `#tags`, and interactive task checkboxes.
 - **Interactive Graph View (`Cmd/Ctrl+G`):** Force-directed graph physics rendered directly with `egui::Painter` (pan, zoom, drag nodes, filter, hover highlights, click to open note, zero idle CPU when settled).
 - **Bases Table (`Cmd/Ctrl+B`):** Filterable, sortable tabular view over vault notes (folder, tag, property filters) with native CSV export.

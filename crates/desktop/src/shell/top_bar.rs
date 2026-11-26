@@ -80,7 +80,7 @@ fn draw_actions(ui: &mut Ui, state: &mut AppState, pal: Palette) {
 
 fn draw_vault_actions(ui: &mut Ui, state: &mut AppState, pal: Palette) {
     let has_vault = state.vault.is_some();
-    let quick_switch_tooltip = format!("Quick switch ({MOD_KEY}+K)");
+    let quick_switch_tooltip = format!("Quick switch ({MOD_KEY}+P)");
     let quick_switch = ui
         .add_enabled_ui(has_vault, |ui| {
             icon_button(ui, pal, icons::MAGNIFYING_GLASS, &quick_switch_tooltip)
@@ -98,7 +98,8 @@ fn draw_vault_actions(ui: &mut Ui, state: &mut AppState, pal: Palette) {
     if new_note.clicked() {
         state.open_new_note_dialog();
     }
-    if icon_button(ui, pal, icons::FOLDER_SIMPLE_PLUS, "Open vault").clicked() {
+    let open_vault_tooltip = format!("Open vault ({MOD_KEY}+O)");
+    if icon_button(ui, pal, icons::FOLDER_SIMPLE_PLUS, &open_vault_tooltip).clicked() {
         pick_vault_folder(state);
     }
 }

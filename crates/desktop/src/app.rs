@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use eframe::egui;
 
 use crate::shell::center::CenterViews;
+use crate::shell::widgets::pick_vault_folder;
 use crate::shell::{center, left_sidebar, modals, right_sidebar, status_bar, top_bar};
 use crate::shortcuts::handle_shortcuts;
 use crate::state::AppState;
@@ -43,7 +44,9 @@ impl CottonMdApp {
 impl eframe::App for CottonMdApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let pal = self.resolve_palette(ctx);
-        handle_shortcuts(ctx, &mut self.state);
+        if handle_shortcuts(ctx, &mut self.state) {
+            pick_vault_folder(&mut self.state);
+        }
         top_bar::show(ctx, &mut self.state, pal);
         status_bar::show(ctx, &self.state, pal);
         left_sidebar::show(ctx, &mut self.state, pal);

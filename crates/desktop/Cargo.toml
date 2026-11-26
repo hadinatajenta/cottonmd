@@ -18,6 +18,7 @@ cottonmd-graph.workspace = true
 cottonmd-bases.workspace = true
 cottonmd-canvas.workspace = true
 cottonmd-search.workspace = true
+egui-phosphor = { version = "=0.9.0", default-features = false, features = ["regular"] }
 
 [target.'cfg(windows)'.dependencies]
 rfd = { version = "=0.15.3", default-features = false, features = ["common-controls-v6"] }

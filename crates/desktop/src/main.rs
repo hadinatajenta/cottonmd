@@ -6,6 +6,7 @@ mod graph_view;
 mod markdown_view;
 mod state;
 mod theme;
+mod ui_kit;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -948,6 +949,9 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "CottonMD",
         options,
-        Box::new(move |_cc| Ok(Box::new(CottonMdApp::new(initial_vault)))),
+        Box::new(move |cc| {
+            theme::install_fonts(&cc.egui_ctx);
+            Ok(Box::new(CottonMdApp::new(initial_vault)))
+        }),
     )
 }

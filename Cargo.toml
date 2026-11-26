@@ -1,0 +1,38 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/vault",
+    "crates/markdown",
+    "crates/graph",
+    "crates/bases",
+    "crates/canvas",
+    "crates/search",
+    "crates/cli",
+    "crates/desktop",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+authors = ["Hadinata <hadinata.jenta@sharingvision.co.id>"]
+repository = "https://github.com/hadinatajenta/cottonmd"
+
+[workspace.dependencies]
+cottonmd-vault = { path = "crates/vault" }
+cottonmd-markdown = { path = "crates/markdown" }
+cottonmd-graph = { path = "crates/graph" }
+cottonmd-bases = { path = "crates/bases" }
+cottonmd-canvas = { path = "crates/canvas" }
+cottonmd-search = { path = "crates/search" }
+eframe = { version = "=0.31.1", default-features = false, features = ["accesskit", "default_fonts", "glow"] }
+rfd = { version = "=0.15.3", default-features = false }
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+codegen-units = 1
+strip = true

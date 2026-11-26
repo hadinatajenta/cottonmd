@@ -1,0 +1,7 @@
+[package]
+name = "cottonmd-markdown"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]

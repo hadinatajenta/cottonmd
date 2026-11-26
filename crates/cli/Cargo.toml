@@ -1,0 +1,16 @@
+[package]
+name = "cottonmd-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "cottonmd-cli"
+path = "src/main.rs"
+
+[dependencies]
+cottonmd-vault.workspace = true
+cottonmd-markdown.workspace = true
+cottonmd-graph.workspace = true
+cottonmd-bases.workspace = true
+cottonmd-search.workspace = true

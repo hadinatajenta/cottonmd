@@ -1,0 +1,29 @@
+[package]
+name = "cottonmd-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "CottonMD"
+path = "src/main.rs"
+
+[dependencies]
+eframe.workspace = true
+rfd.workspace = true
+cottonmd-vault.workspace = true
+cottonmd-markdown.workspace = true
+cottonmd-graph.workspace = true
+cottonmd-bases.workspace = true
+cottonmd-canvas.workspace = true
+cottonmd-search.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+rfd = { version = "=0.15.3", default-features = false, features = ["common-controls-v6"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rfd = { version = "=0.15.3", default-features = false, features = ["xdg-portal"] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "=0.1.22"

@@ -1,0 +1,9 @@
+[package]
+name = "cottonmd-graph"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+cottonmd-vault.workspace = true
+cottonmd-markdown.workspace = true

@@ -278,14 +278,13 @@ pub fn tree_row(ui: &mut Ui, pal: Palette, row: &TreeRow) -> Response {
         egui::FontId::proportional(15.0),
         icon_color,
     );
-    let label_color = if row.is_selected { pal.text_primary } else { pal.text_primary };
     let label_font = if row.is_selected { semibold(13.5) } else { egui::FontId::proportional(13.5) };
     painter.text(
         egui::pos2(content_left + 40.0, rect.center().y),
         Align2::LEFT_CENTER,
         row.label,
         label_font,
-        label_color,
+        pal.text_primary,
     );
     if !row.meta.is_empty() {
         painter.text(

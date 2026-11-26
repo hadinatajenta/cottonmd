@@ -37,12 +37,10 @@ ctx.interpolationQuality = .high
 ctx.setAllowsAntialiasing(true)
 ctx.setShouldAntialias(true)
 
-// Apple HIG macOS squircle: 824x824 tile centered on 1024x1024 canvas
 let tileInset: CGFloat = 100.0
 let tileSize: CGFloat = canvasSize - tileInset * 2.0
 let tileRect = CGRect(x: tileInset, y: tileInset, width: tileSize, height: tileSize)
 
-// Superellipse squircle path (n = 4.6 closely matches Apple continuous-curvature icon shape)
 func makeSquirclePath(in rect: CGRect, inset: CGFloat = 0.0) -> CGPath {
     let r = rect.insetBy(dx: inset, dy: inset)
     let cx = r.midX
@@ -72,25 +70,22 @@ func makeSquirclePath(in rect: CGRect, inset: CGFloat = 0.0) -> CGPath {
 
 let squircle = makeSquirclePath(in: tileRect)
 
-// 1. Soft macOS Dock ambient + drop shadow
 ctx.saveGState()
 ctx.setShadow(
     offset: CGSize(width: 0, height: -14),
     blur: 28,
-    color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.44)
+    color: CGColor(srgbRed: 0.01, green: 0.04, blue: 0.12, alpha: 0.46)
 )
 ctx.addPath(squircle)
-ctx.setFillColor(CGColor(srgbRed: 0.08, green: 0.09, blue: 0.12, alpha: 1.0))
+ctx.setFillColor(CGColor(srgbRed: 0.05, green: 0.12, blue: 0.28, alpha: 1.0))
 ctx.fillPath()
 ctx.restoreGState()
 
-// 2. Clipped full-bleed artwork inside the Apple squircle
 ctx.saveGState()
 ctx.addPath(squircle)
 ctx.clip()
 
-// Subtle 1.06x crop so the crystal sits generously inside the 824x824 tile
-let scale: CGFloat = 1.06
+let scale: CGFloat = 1.05
 let drawW = tileRect.width * scale
 let drawH = tileRect.height * scale
 let drawRect = CGRect(
@@ -101,36 +96,34 @@ let drawRect = CGRect(
 )
 ctx.draw(cgSrc, in: drawRect)
 
-// 3. Delicate Liquid Glass top-left overhead optical sheen
 let sheenColors = [
-    CGColor(srgbRed: 0.90, green: 0.95, blue: 1.0, alpha: 0.12),
-    CGColor(srgbRed: 0.72, green: 0.84, blue: 0.98, alpha: 0.03),
+    CGColor(srgbRed: 0.92, green: 0.97, blue: 1.0, alpha: 0.16),
+    CGColor(srgbRed: 0.72, green: 0.88, blue: 1.0, alpha: 0.04),
     CGColor(srgbRed: 0.0, green: 0.0, blue: 0.0, alpha: 0.0),
 ] as CFArray
-if let sheenGrad = CGGradient(colorsSpace: colorSpace, colors: sheenColors, locations: [0.0, 0.36, 0.72]) {
+if let sheenGrad = CGGradient(colorsSpace: colorSpace, colors: sheenColors, locations: [0.0, 0.35, 0.72]) {
     ctx.drawLinearGradient(
         sheenGrad,
-        start: CGPoint(x: tileRect.minX + 60, y: tileRect.maxY),
-        end: CGPoint(x: tileRect.maxX - 80, y: tileRect.minY + 120),
+        start: CGPoint(x: tileRect.minX + 56, y: tileRect.maxY),
+        end: CGPoint(x: tileRect.maxX - 72, y: tileRect.minY + 110),
         options: []
     )
 }
 
-// 4. Liquid Glass luminous refractive inner bevel (top-left bright frost -> mid silver-blue -> subtle bottom bounce)
 let innerRimPath = makeSquirclePath(in: tileRect, inset: 3.0)
 ctx.saveGState()
 ctx.addPath(innerRimPath)
-ctx.setLineWidth(5.5)
+ctx.setLineWidth(6.0)
 ctx.replacePathWithStrokedPath()
 ctx.clip()
 
 let rimColors = [
-    CGColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.52),
-    CGColor(srgbRed: 0.68, green: 0.80, blue: 0.96, alpha: 0.22),
-    CGColor(srgbRed: 0.85, green: 0.64, blue: 0.50, alpha: 0.16),
-    CGColor(srgbRed: 0.75, green: 0.84, blue: 0.96, alpha: 0.30),
+    CGColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.62),
+    CGColor(srgbRed: 0.72, green: 0.88, blue: 1.0, alpha: 0.28),
+    CGColor(srgbRed: 0.62, green: 0.80, blue: 0.98, alpha: 0.18),
+    CGColor(srgbRed: 0.88, green: 0.95, blue: 1.0, alpha: 0.40),
 ] as CFArray
-if let rimGrad = CGGradient(colorsSpace: colorSpace, colors: rimColors, locations: [0.0, 0.35, 0.68, 1.0]) {
+if let rimGrad = CGGradient(colorsSpace: colorSpace, colors: rimColors, locations: [0.0, 0.34, 0.68, 1.0]) {
     ctx.drawLinearGradient(
         rimGrad,
         start: CGPoint(x: tileRect.minX + 40, y: tileRect.maxY),
@@ -140,19 +133,17 @@ if let rimGrad = CGGradient(colorsSpace: colorSpace, colors: rimColors, location
 }
 ctx.restoreGState()
 
-// Crisp 1.5px inner glass edge highlight
 let fineRimPath = makeSquirclePath(in: tileRect, inset: 1.2)
 ctx.addPath(fineRimPath)
 ctx.setLineWidth(1.6)
-ctx.setStrokeColor(CGColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.24))
+ctx.setStrokeColor(CGColor(srgbRed: 1.0, green: 1.0, blue: 1.0, alpha: 0.30))
 ctx.strokePath()
 
 ctx.restoreGState()
 
-// 5. Hairline dark outer stroke so the Liquid Glass tile stays crisp on Light Mode wallpaper
 ctx.addPath(squircle)
 ctx.setLineWidth(1.5)
-ctx.setStrokeColor(CGColor(srgbRed: 0.03, green: 0.04, blue: 0.06, alpha: 0.35))
+ctx.setStrokeColor(CGColor(srgbRed: 0.02, green: 0.06, blue: 0.14, alpha: 0.34))
 ctx.strokePath()
 
 guard let outImage = ctx.makeImage() else {

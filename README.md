@@ -4,14 +4,16 @@ Lightweight, local-first **Markdown Knowledge Workspace** built in pure **Rust**
 
 ## Features
 
-- **Local-First Vault & File Explorer:** Hierarchical folder tree, instant file filter, native OS folder picker (`Open Vault`), `New Note` (`Cmd/Ctrl+N`), and `Quick Switcher` (`Cmd/Ctrl+K` / `Cmd/Ctrl+O`).
-- **Markdown Editor, Split & Preview (`Cmd/Ctrl+E`):** Clean writing surface with unsaved indicator, `Save` (`Cmd/Ctrl+S`), and a native preview rendering headings (`H1–H6`), YAML frontmatter properties, callouts (`> [!note]`), fenced code blocks, clickable `[[wikilinks]]` (navigate or create notes), `#tags`, and interactive task checkboxes.
+- **Local-First Vault & File Explorer:** Hierarchical folder tree, instant file filter, native OS folder picker (`Open Vault`, `Cmd/Ctrl+O`), `New Note` (`Cmd/Ctrl+N`), and `Quick Switcher` (`Cmd/Ctrl+P` / `Cmd/Ctrl+K`).
+- **Markdown Editor, Split & Preview (`Cmd/Ctrl+E`):** Clean writing surface with unsaved indicator, `Save` (`Cmd/Ctrl+S`), and a native preview rendering headings (`H1–H6`), YAML frontmatter properties, callouts (`> [!note]`), fenced code blocks, clickable `[[wikilinks]]` (navigate or create notes) and standard `[text](relative/path.md)` links (navigate notes, open URLs in the browser), `#tags`, and interactive task checkboxes.
 - **Interactive Graph View (`Cmd/Ctrl+G`):** Force-directed graph physics rendered directly with `egui::Painter` (pan, zoom, drag nodes, filter, hover highlights, click to open note, zero idle CPU when settled).
 - **Bases Table (`Cmd/Ctrl+B`):** Filterable, sortable tabular view over vault notes (folder, tag, property filters) with native CSV export.
 - **JSON Canvas Viewer (`.canvas`):** Pan/zoom 2D renderer for JSON Canvas 1.0 documents (Text, File, Link, Group nodes and edges).
 - **Inspector Sidebar:** Backlinks, Outgoing Links, Unresolved Links (click to create), Heading Outline, YAML Properties, and interactive Tasks.
 - **Dark & Light Themes:** Built-in restrained dark charcoal and warm paper light themes.
-- **Companion CLI (`cottonmd-cli`):** Fast headless CLI for scripting vault queries (`stats`, `files`, `read`, `search`, `links`, `backlinks`, `orphans`, `deadends`, `unresolved`, `tags`, `tasks`).
+- **Link Graph from Wikilinks and Markdown Links:** Backlinks, graph, orphans and unresolved links understand both `[[Note]]` and relative `[text](../folder/note.md)` links, so plain GitHub-style Markdown folders work as a knowledge graph.
+- **Vault Scope (`.cottonmd/vault.json`):** Index only chosen folders of a large workspace; `node_modules`, `vendor`, and `target` are always skipped.
+- **Companion CLI (`cottonmd-cli`):** Fast headless CLI for scripting vault queries and AI agents (`stats`, `files`, `read`, `search`, `links`, `backlinks`, `related`, `orphans`, `deadends`, `unresolved`, `tags`, `tasks`).
 
 ## Workspace Layout
 
@@ -73,7 +75,28 @@ cargo build --release -p cottonmd-desktop -p cottonmd-cli
 ```bash
 cargo run --release -p cottonmd-cli -- --vault /path/to/vault stats
 cargo run --release -p cottonmd-cli -- --vault /path/to/vault search "architecture"
+cargo run --release -p cottonmd-cli -- --vault /path/to/vault related notes/service.md
 ```
+
+`related` prints one note per line as `in|out<TAB>path<TAB>title`, incoming links first, which makes it a
+cheap way for a coding agent to pull every note connected to a page. Without `--vault`, the current
+directory is the vault.
+
+### Vault Scope
+
+To use a large workspace (for example a folder of many code repositories) as a vault, add
+`.cottonmd/vault.json` at the vault root:
+
+```json
+{
+  "include": ["_library", "docs"],
+  "exclude": ["archive"]
+}
+```
+
+- `include`: vault-relative folders to index; when empty or missing, everything is indexed.
+- `exclude`: directory names skipped at any depth, in addition to `node_modules`, `vendor`, and `target`.
+- Unknown keys or invalid JSON are reported as an error instead of being ignored.
 
 ## License
 

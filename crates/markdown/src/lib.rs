@@ -1,14 +1,12 @@
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WikiLink {
-    pub raw: String,
-    pub target: String,
-    pub subpath: Option<String>,
-    pub alias: Option<String>,
-    pub is_embed: bool,
-    pub line: usize,
-}
+mod links;
+
+pub use links::{
+    is_external_link, parse_markdown_link_span, resolve_relative_link, LinkStyle, MarkdownLinkSpan,
+    WikiLink,
+};
+use links::{extract_markdown_links, extract_wikilinks};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Heading {
@@ -118,6 +116,7 @@ pub fn parse_note(content: &str) -> ParsedNote {
         }
 
         extract_wikilinks(line, line_no, &mut parsed.links);
+        extract_markdown_links(line, line_no, &mut parsed.links);
         extract_inline_tags(line, &mut parsed.tags);
     }
 
@@ -188,47 +187,6 @@ fn parse_task(trimmed: &str, line: usize) -> Option<TaskItem> {
     }
     let text = chars.as_str().trim().to_string();
     Some(TaskItem { status, text, line })
-}
-
-fn extract_wikilinks(line: &str, line_no: usize, out: &mut Vec<WikiLink>) {
-    let bytes = line.as_bytes();
-    let mut i = 0;
-    let mut in_code = false;
-    while i < bytes.len() {
-        if bytes[i] == b'`' {
-            in_code = !in_code;
-            i += 1;
-            continue;
-        }
-        if !in_code && i + 1 < bytes.len() && bytes[i] == b'[' && bytes[i + 1] == b'[' {
-            let is_embed = i > 0 && bytes[i - 1] == b'!';
-            let start = i + 2;
-            if let Some(rel_end) = line[start..].find("]]") {
-                let raw = &line[start..start + rel_end];
-                if !raw.is_empty() && !raw.contains('[') {
-                    let (link_part, alias) = match raw.split_once('|') {
-                        Some((l, a)) => (l.trim(), Some(a.trim().to_string())),
-                        None => (raw.trim(), None),
-                    };
-                    let (target, subpath) = match link_part.split_once('#') {
-                        Some((t, sub)) => (t.trim().to_string(), Some(sub.trim().to_string())),
-                        None => (link_part.to_string(), None),
-                    };
-                    out.push(WikiLink {
-                        raw: raw.to_string(),
-                        target,
-                        subpath,
-                        alias,
-                        is_embed,
-                        line: line_no,
-                    });
-                }
-                i = start + rel_end + 2;
-                continue;
-            }
-        }
-        i += 1;
-    }
 }
 
 fn extract_inline_tags(line: &str, out: &mut Vec<String>) {

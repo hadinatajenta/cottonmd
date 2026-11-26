@@ -1,3 +1,4 @@
+use cottonmd_markdown::is_external_link;
 use eframe::egui::{self, CornerRadius, Frame, Margin, RichText, Sense, Stroke, Ui};
 
 use super::emphasis::{split_emphasis, Emphasis};
@@ -45,6 +46,7 @@ fn render_token(
             display,
             is_embed,
         } => render_wikilink(ui, context, target_file, display, is_embed),
+        InlineToken::Link { display, href } => render_link(ui, context, display, href),
         InlineToken::Code(code) => {
             render_code_chip(ui, pal, code);
             None
@@ -93,6 +95,36 @@ fn render_wikilink(
     response
         .clicked()
         .then(|| PreviewAction::OpenLink(target_file.to_string()))
+}
+
+fn render_link(
+    ui: &mut Ui,
+    context: &RenderContext,
+    display: &str,
+    href: &str,
+) -> Option<PreviewAction> {
+    let pal = context.pal;
+    let is_external = is_external_link(href);
+    let color = if is_external || (context.resolve_exists)(href) {
+        pal.accent
+    } else {
+        pal.unresolved
+    };
+    let label = if display.is_empty() { href } else { display };
+    let response = ui
+        .add(egui::Label::new(body_text(label, color).underline()).sense(Sense::click()))
+        .on_hover_text(href);
+    if response.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if !response.clicked() {
+        return None;
+    }
+    if is_external {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(href));
+        return None;
+    }
+    Some(PreviewAction::OpenRelativeLink(href.to_string()))
 }
 
 fn render_code_chip(ui: &mut Ui, pal: Palette, code: &str) {

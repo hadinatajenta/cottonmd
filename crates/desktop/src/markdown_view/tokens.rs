@@ -1,3 +1,5 @@
+use cottonmd_markdown::parse_markdown_link_span;
+
 #[derive(Debug, PartialEq)]
 pub enum InlineToken<'a> {
     Plain(&'a str),
@@ -5,6 +7,10 @@ pub enum InlineToken<'a> {
         target_file: &'a str,
         display: &'a str,
         is_embed: bool,
+    },
+    Link {
+        display: &'a str,
+        href: &'a str,
     },
     Code(&'a str),
     Tag(&'a str),
@@ -41,7 +47,7 @@ fn push_plain<'a>(tokens: &mut Vec<InlineToken<'a>>, segment: &'a str) {
 
 fn parse_token_at(text: &str, cursor: usize) -> Option<(InlineToken<'_>, usize)> {
     match text.as_bytes()[cursor] {
-        b'[' => parse_wikilink(text, cursor),
+        b'[' => parse_wikilink(text, cursor).or_else(|| parse_link(text, cursor)),
         b'`' => parse_code(text, cursor),
         b'#' => parse_tag(text, cursor),
         _ => None,
@@ -68,6 +74,15 @@ fn parse_wikilink(text: &str, cursor: usize) -> Option<(InlineToken<'_>, usize)>
         is_embed,
     };
     Some((token, cursor + 2 + relative_end + 2))
+}
+
+fn parse_link(text: &str, cursor: usize) -> Option<(InlineToken<'_>, usize)> {
+    let span = parse_markdown_link_span(text, cursor).filter(|span| !span.is_image)?;
+    let token = InlineToken::Link {
+        display: span.display.trim(),
+        href: span.href.trim(),
+    };
+    Some((token, span.end))
 }
 
 fn parse_code(text: &str, cursor: usize) -> Option<(InlineToken<'_>, usize)> {
@@ -97,6 +112,21 @@ fn parse_tag(text: &str, cursor: usize) -> Option<(InlineToken<'_>, usize)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn markdown_link_becomes_link_token_and_image_stays_plain() {
+        assert_eq!(
+            tokenize_inline("see [sprint 32](../sprint_32/backend-work.md) and ![x](a.png)"),
+            vec![
+                InlineToken::Plain("see "),
+                InlineToken::Link {
+                    display: "sprint 32",
+                    href: "../sprint_32/backend-work.md"
+                },
+                InlineToken::Plain(" and ![x](a.png)"),
+            ]
+        );
+    }
 
     #[test]
     fn plain_text_is_a_single_token() {

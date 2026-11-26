@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use cottonmd_canvas::CanvasDocument;
 use cottonmd_graph::VaultGraph;
-use cottonmd_markdown::{parse_note, ParsedNote};
+use cottonmd_markdown::{parse_note, resolve_relative_link, ParsedNote};
 use cottonmd_search::{IndexedDocument, SearchHit, SearchIndex};
 use cottonmd_vault::{EntryKind, Vault, VaultFile};
 
@@ -77,7 +77,18 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(initial_vault: Option<PathBuf>) -> Self {
-        let mut state = Self {
+        let mut state = Self::empty();
+        let candidate = initial_vault.or_else(load_last_vault_path);
+        if let Some(path) = candidate {
+            if path.is_dir() {
+                state.open_vault(&path);
+            }
+        }
+        state
+    }
+
+    pub fn empty() -> Self {
+        Self {
             dark_mode: true,
             show_left_sidebar: true,
             show_right_sidebar: true,
@@ -110,17 +121,7 @@ impl AppState {
             new_note_name: String::new(),
             status_message: None,
             graph_revision: 0,
-        };
-
-        let candidate = initial_vault.or_else(load_last_vault_path);
-
-        if let Some(path) = candidate {
-            if path.is_dir() {
-                state.open_vault(&path);
-            }
         }
-
-        state
     }
 
     pub fn vault_name(&self) -> String {
@@ -309,6 +310,13 @@ impl AppState {
         self.create_and_open_note(&candidate, &format!("# {}\n\n", target.trim()));
     }
 
+    pub fn open_relative_link(&mut self, href: &str) {
+        match resolve_relative_in_files(&self.files, self.active_path.as_deref(), href) {
+            Some(resolved) => self.open_file(&resolved),
+            None => self.status_message = Some(format!("Link target not found: {href}")),
+        }
+    }
+
     pub fn resolve_link_target(&self, target: &str) -> Option<String> {
         let key = target.trim().to_ascii_lowercase();
         if key.is_empty() {
@@ -431,6 +439,16 @@ impl AppState {
     }
 }
 
+pub fn resolve_relative_in_files(
+    files: &[VaultFile],
+    source_path: Option<&str>,
+    href: &str,
+) -> Option<String> {
+    let vault_path = resolve_relative_link(source_path?, href)?;
+    resolve_link_in_files(files, &vault_path)
+        .filter(|resolved| resolved.eq_ignore_ascii_case(&vault_path))
+}
+
 pub fn resolve_link_in_files(files: &[VaultFile], target: &str) -> Option<String> {
     let key = target.trim().to_ascii_lowercase();
     if key.is_empty() {
@@ -473,5 +491,39 @@ mod tests {
     #[test]
     fn move_selection_with_no_entries_stays_at_zero() {
         assert_eq!(move_selection(3, 1, 0), 0);
+    }
+
+    fn note_file(relative_path: &str) -> VaultFile {
+        VaultFile {
+            relative_path: relative_path.to_string(),
+            stem: relative_path
+                .rsplit('/')
+                .next()
+                .unwrap_or(relative_path)
+                .trim_end_matches(".md")
+                .to_string(),
+            extension: Some("md".to_string()),
+            kind: EntryKind::Markdown,
+            size_bytes: 1,
+            modified: None,
+            created: None,
+        }
+    }
+
+    #[test]
+    fn relative_links_resolve_only_to_the_exact_vault_path() {
+        let files = vec![
+            note_file("docs/sprint_36/docs/CRMMS-1/README.md"),
+            note_file("_library/repos/zenith.md"),
+            note_file("other/zenith.md"),
+        ];
+        let source = Some("docs/sprint_36/docs/CRMMS-1/README.md");
+        assert_eq!(
+            resolve_relative_in_files(&files, source, "../../../../_library/repos/zenith.md")
+                .as_deref(),
+            Some("_library/repos/zenith.md")
+        );
+        assert_eq!(resolve_relative_in_files(&files, source, "zenith.md"), None);
+        assert_eq!(resolve_relative_in_files(&files, None, "_library/repos/zenith.md"), None);
     }
 }

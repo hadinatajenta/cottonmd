@@ -17,6 +17,7 @@ const BODY_LINE_HEIGHT: f32 = 23.0;
 
 pub enum PreviewAction {
     OpenLink(String),
+    OpenRelativeLink(String),
     FilterTag(String),
     ToggleTask(usize),
 }

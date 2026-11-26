@@ -6,7 +6,7 @@ use crate::graph_view::GraphViewState;
 use crate::markdown_view::{render_markdown_preview, PreviewAction};
 use crate::shell::widgets::pick_vault_folder;
 use crate::shell::MOD_KEY;
-use crate::state::{resolve_link_in_files, AppState, CenterMode, LeftTab};
+use crate::state::{resolve_link_in_files, resolve_relative_in_files, AppState, CenterMode, LeftTab};
 use crate::theme::{Palette, RADIUS_CONTROL};
 use crate::ui_kit::{canvas_frame, card_frame};
 
@@ -44,6 +44,7 @@ pub fn show(ctx: &egui::Context, state: &mut AppState, views: &mut CenterViews, 
 fn apply_outcome(state: &mut AppState, outcome: CenterOutcome) {
     match outcome.preview_action {
         Some(PreviewAction::OpenLink(target)) => state.open_wikilink(&target),
+        Some(PreviewAction::OpenRelativeLink(href)) => state.open_relative_link(&href),
         Some(PreviewAction::FilterTag(tag)) => {
             state.show_left_sidebar = true;
             state.left_tab = LeftTab::Tags;
@@ -85,7 +86,12 @@ fn draw_note_mode(ui: &mut Ui, state: &mut AppState, pal: Palette) -> Option<Pre
     if let Some(error) = &state.canvas_error {
         ui.label(RichText::new(format!("Canvas JSON parse error: {error}")).color(pal.unresolved));
     }
-    let link_exists = |target: &str| resolve_link_in_files(&state.files, target).is_some();
+    let files = &state.files;
+    let active_path = state.active_path.as_deref();
+    let link_exists = |target: &str| {
+        resolve_link_in_files(files, target).is_some()
+            || resolve_relative_in_files(files, active_path, target).is_some()
+    };
     match state.center_mode {
         CenterMode::Edit => {
             egui::ScrollArea::vertical().show(ui, |ui| draw_editor(ui, &mut state.editor_buffer));
@@ -155,7 +161,7 @@ fn draw_welcome(ui: &mut Ui, state: &mut AppState, pal: Palette) {
             let message = if state.vault.is_some() {
                 format!("Select a note from Files or press {MOD_KEY}+N to create one.")
             } else {
-                "Open a local Markdown vault folder to start writing.".to_string()
+                format!("Open a local Markdown vault folder ({MOD_KEY}+O) to start writing.")
             };
             ui.label(RichText::new(message).color(pal.text_muted));
             ui.add_space(12.0);

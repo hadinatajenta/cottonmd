@@ -3,13 +3,13 @@ import CoreGraphics
 import Foundation
 
 guard CommandLine.arguments.count == 4 else {
-    fputs("Usage: export-windows-icons.swift <input-1024.png> <output.ico> <output-64.rgba>\n", stderr)
+    fputs("Usage: export-windows-icons.swift <input-1024.png> <output.ico> <output-256.png>\n", stderr)
     exit(1)
 }
 
 let srcPath = CommandLine.arguments[1]
 let icoPath = CommandLine.arguments[2]
-let rgbaPath = CommandLine.arguments[3]
+let runtimePngPath = CommandLine.arguments[3]
 
 guard let srcImg = NSImage(contentsOfFile: srcPath),
       let cgSrc = srcImg.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
@@ -88,42 +88,12 @@ for (_, data) in pngs {
     ico.append(data)
 }
 
-// Also export straight RGBA 64x64 for runtime egui::IconData (Windows/Linux titlebar & taskbar)
-guard let ctx64 = CGContext(
-    data: nil,
-    width: 64,
-    height: 64,
-    bitsPerComponent: 8,
-    bytesPerRow: 64 * 4,
-    space: colorSpace,
-    bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-) else {
-    fputs("Failed to create 64x64 context\n", stderr)
+// Also export 256x256 PNG for runtime egui::IconData (Windows/Linux & unpackaged dev runs)
+guard let runtimePng = pngs.first(where: { $0.0 == 256 })?.1 else {
+    fputs("Missing 256x256 PNG rendition\n", stderr)
     exit(1)
-}
-ctx64.interpolationQuality = .high
-ctx64.draw(cgSrc, in: CGRect(x: 0, y: 0, width: 64, height: 64))
-var straightRgba = Data(count: 64 * 64 * 4)
-if let srcPtr = ctx64.data {
-    let bytes = srcPtr.assumingMemoryBound(to: UInt8.self)
-    straightRgba.withUnsafeMutableBytes { dstBuf in
-        let dst = dstBuf.bindMemory(to: UInt8.self)
-        for i in stride(from: 0, to: 64 * 64 * 4, by: 4) {
-            let a = Int(bytes[i + 3])
-            if a == 0 {
-                dst[i] = 0; dst[i + 1] = 0; dst[i + 2] = 0; dst[i + 3] = 0
-            } else if a == 255 {
-                dst[i] = bytes[i]; dst[i + 1] = bytes[i + 1]; dst[i + 2] = bytes[i + 2]; dst[i + 3] = 255
-            } else {
-                dst[i] = UInt8(min(255, (Int(bytes[i]) * 255 + a / 2) / a))
-                dst[i + 1] = UInt8(min(255, (Int(bytes[i + 1]) * 255 + a / 2) / a))
-                dst[i + 2] = UInt8(min(255, (Int(bytes[i + 2]) * 255 + a / 2) / a))
-                dst[i + 3] = UInt8(a)
-            }
-        }
-    }
 }
 
 try ico.write(to: URL(fileURLWithPath: icoPath))
-try straightRgba.write(to: URL(fileURLWithPath: rgbaPath))
-print("Wrote \(icoPath) (\(ico.count) bytes, \(sizes.count) resolutions) and \(rgbaPath) (\(straightRgba.count) bytes)")
+try runtimePng.write(to: URL(fileURLWithPath: runtimePngPath))
+print("Wrote \(icoPath) (\(ico.count) bytes, \(sizes.count) resolutions) and \(runtimePngPath) (\(runtimePng.count) bytes)")

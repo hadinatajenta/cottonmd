@@ -24,7 +24,7 @@ cottonmd/
 │   ├── AppIcon-1024.png   # Liquid Glass macOS squircle master icon
 │   ├── AppIcon.icns       # Multi-resolution macOS Retina icon
 │   ├── AppIcon.ico        # Multi-resolution Windows icon (16–256px)
-│   └── AppIcon-64.rgba    # Embedded runtime window icon (Windows/Linux)
+│   └── AppIcon-256.png    # Embedded HD runtime window icon (Windows/Linux/dev)
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── ROADMAP.md

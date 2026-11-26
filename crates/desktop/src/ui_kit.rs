@@ -330,6 +330,15 @@ pub fn section_label(ui: &mut Ui, pal: Palette, text: &str) {
     );
 }
 
+pub fn empty_state(ui: &mut Ui, pal: Palette, icon: &str, message: &str) {
+    ui.vertical_centered(|ui| {
+        ui.add_space((ui.available_height() * 0.3).clamp(24.0, 160.0));
+        ui.label(RichText::new(icon).size(34.0).color(pal.border_strong));
+        ui.add_space(8.0);
+        ui.label(RichText::new(message).color(pal.text_muted));
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
